@@ -30,8 +30,8 @@ export function useFilterByIngredients(ingredients) {
 
 export function useCategoryDrinks(ingredient) {
   return useQuery({
-    queryKey: ['byIngredient', ingredient],
-    queryFn: () => cocktailApi.filterByIngredient(ingredient),
+    queryKey: ['search', ingredient],
+    queryFn: () => cocktailApi.searchByName(ingredient),
     staleTime: 5 * 60 * 1000,
     enabled: !!ingredient,
   })

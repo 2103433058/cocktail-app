@@ -2,7 +2,7 @@
   "name": "cocktail-app",
   "private": true,
   "version": "1.0.0",
-  "homepage": "https://YOUR_USERNAME.github.io/cocktail-app",
+  "homepage": "https://2103433058.github.io/cocktail-app",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -43,6 +43,11 @@ export const cocktailApi = {
     return data.drinks || []
   },
 
+  async filterByIngredient(ingredient) {
+    const data = await fetchJSON(`${BASE}/filter.php?i=${encodeURIComponent(ingredient)}`)
+    return data.drinks || []
+  },
+
   async getRandom() {
     const data = await fetchJSON(`${BASE}/random.php`)
     return data.drinks ? data.drinks[0] : null

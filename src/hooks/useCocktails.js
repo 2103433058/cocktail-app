@@ -28,12 +28,12 @@ export function useFilterByIngredients(ingredients) {
   })
 }
 
-export function useCategoryDrinks(category) {
+export function useCategoryDrinks(ingredient) {
   return useQuery({
-    queryKey: ['category', category],
-    queryFn: () => cocktailApi.filterByCategory(category),
+    queryKey: ['byIngredient', ingredient],
+    queryFn: () => cocktailApi.filterByIngredient(ingredient),
     staleTime: 5 * 60 * 1000,
-    enabled: !!category,
+    enabled: !!ingredient,
   })
 }
 

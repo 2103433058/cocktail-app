@@ -1,3 +1,178 @@
+import { useParams, Link } from 'react-router-dom'
+import { useCocktailDetail } from '../hooks/useCocktails'
+import { useStore } from '../store/useStore'
+import { translateDrinkName, translateIngredient, translateGlass } from '../utils/translate'
+import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorMessage from '../components/ErrorMessage'
+
+function getIngredients(drink) {
+  const ingredients = []
+  for (let i = 1; i <= 15; i++) {
+    const name = drink[`strIngredient${i}`]
+    const measure = drink[`strMeasure${i}`]
+    if (name && name.trim()) {
+      ingredients.push({
+        name: name.trim(),
+        measure: (measure || '').trim(),
+      })
+    }
+  }
+  return ingredients
+}
+
 export default function DrinkDetailPage() {
-  return <div className="py-6"><p className="text-center text-vintage-gold font-heading text-xl">饮品详情页面</p></div>
+  const { id } = useParams()
+  const { data: drink, isLoading, error, refetch } = useCocktailDetail(id)
+  const { toggleFavorite, isFavorite, addToShoppingList } = useStore()
+
+  if (isLoading) return <LoadingSpinner />
+  if (error) return <ErrorMessage message="加载配方失败" onRetry={refetch} />
+  if (!drink) return <ErrorMessage message="未找到这款鸡尾酒" />
+
+  const fav = isFavorite(drink.idDrink)
+  const ingredients = getIngredients(drink)
+  const cnName = translateDrinkName(drink.strDrink)
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `${cnName} - 复古调酒手册`,
+      text: `来试试${cnName}（${drink.strDrink}）吧！${drink.strGlass ? `用${translateGlass(drink.strGlass)}盛装。` : ''}`,
+      url: window.location.href,
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(
+          `${shareData.title}\n${shareData.text}\n${shareData.url}`
+        )
+        alert('链接已复制到剪贴板！')
+      }
+    } catch (e) {
+      // User cancelled or not supported
+    }
+  }
+
+  return (
+    <div className="py-6">
+      {/* Back link */}
+      <Link to="/" className="text-vintage-gold hover:text-vintage-accent text-sm mb-4 inline-block font-body">
+        ← 返回
+      </Link>
+
+      {/* Hero Image */}
+      <div className="card-vintage overflow-hidden mb-6">
+        <div className="relative aspect-video md:aspect-[21/9] overflow-hidden">
+          <img
+            src={drink.strDrinkThumb}
+            alt={drink.strDrink}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.style.display = 'none'
+              e.target.nextSibling.style.display = 'flex'
+            }}
+          />
+          <div className="hidden absolute inset-0 bg-gradient-to-br from-vintage-accent/20 to-vintage-gold/20
+                          items-center justify-center text-8xl">
+            🍸
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="font-heading text-3xl text-vintage-ink">{cnName}</h1>
+              <p className="font-script text-xl text-vintage-gold mt-1">{drink.strDrink}</p>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {drink.strCategory && (
+                  <span className="bg-vintage-gold/20 text-vintage-ink text-xs px-3 py-1 rounded-full
+                                   font-body border border-vintage-gold/40">
+                    {drink.strCategory}
+                  </span>
+                )}
+                {drink.strAlcoholic && (
+                  <span className="bg-vintage-accent/10 text-vintage-accent text-xs px-3 py-1
+                                   rounded-full font-body border border-vintage-accent/30">
+                    {drink.strAlcoholic === 'Alcoholic' ? '🍸 含酒精' : '🧃 无酒精'}
+                  </span>
+                )}
+                {drink.strGlass && (
+                  <span className="bg-vintage-paper text-vintage-ink text-xs px-3 py-1 rounded-full
+                                   font-body border border-vintage-gold/40">
+                    🥂 {translateGlass(drink.strGlass)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => toggleFavorite(drink.idDrink)}
+                className={`px-4 py-2 rounded-sm border-2 font-body text-sm transition-all ${
+                  fav
+                    ? 'bg-vintage-accent text-vintage-card border-vintage-accent'
+                    : 'border-vintage-gold text-vintage-gold hover:bg-vintage-gold/10'
+                }`}
+              >
+                {fav ? '❤️ 已收藏' : '🤍 收藏'}
+              </button>
+              <button
+                onClick={handleShare}
+                className="px-4 py-2 rounded-sm border-2 border-vintage-gold text-vintage-gold
+                           hover:bg-vintage-gold/10 font-body text-sm transition-all"
+              >
+                📤 分享
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        {/* Ingredients */}
+        <div className="card-vintage p-6">
+          <h2 className="font-heading text-xl text-vintage-ink border-b border-vintage-gold/30 pb-2 mb-4">
+            📋 配料清单
+          </h2>
+          <ul className="space-y-2">
+            {ingredients.map((ing, i) => (
+              <li key={i} className="flex justify-between items-center py-1.5
+                                      border-b border-vintage-gold/10 last:border-0">
+                <span className="font-body text-vintage-ink">
+                  {translateIngredient(ing.name)}
+                  <span className="text-xs text-vintage-gold/60 ml-1">{ing.name}</span>
+                </span>
+                {ing.measure && (
+                  <span className="font-script text-vintage-gold text-sm">{ing.measure}</span>
+                )}
+                <button
+                  onClick={() => addToShoppingList(ing.name, '', drink.strDrink)}
+                  className="text-xs text-vintage-gold/50 hover:text-vintage-accent ml-2"
+                  title="加入采购清单"
+                >
+                  ➕
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Instructions */}
+        <div className="card-vintage p-6">
+          <h2 className="font-heading text-xl text-vintage-ink border-b border-vintage-gold/30 pb-2 mb-4">
+            📝 制作步骤
+          </h2>
+          <p className="font-body text-vintage-ink leading-relaxed whitespace-pre-line">
+            {drink.strInstructions || '暂无制作步骤'}
+          </p>
+          {drink.strInstructionsZH && (
+            <div className="mt-3 pt-3 border-t border-vintage-gold/20">
+              <p className="text-sm text-vintage-gold/70 mb-1">中文参考：</p>
+              <p className="font-body text-vintage-ink leading-relaxed">
+                {drink.strInstructionsZH}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }

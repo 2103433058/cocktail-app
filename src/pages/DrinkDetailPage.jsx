@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useCocktailDetail } from '../hooks/useCocktails'
 import { useStore } from '../store/useStore'
 import { translateDrinkName, translateIngredient, translateGlass } from '../utils/translate'
+import { useState } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 
@@ -24,6 +25,7 @@ export default function DrinkDetailPage() {
   const { id } = useParams()
   const { data: drink, isLoading, error, refetch } = useCocktailDetail(id)
   const { toggleFavorite, isFavorite, addToShoppingList } = useStore()
+  const [imageError, setImageError] = useState(false)
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message="加载配方失败" onRetry={refetch} />
@@ -49,7 +51,8 @@ export default function DrinkDetailPage() {
         alert('链接已复制到剪贴板！')
       }
     } catch (e) {
-      // User cancelled or not supported
+      if (e.name === 'AbortError') return
+      console.warn('分享失败:', e)
     }
   }
 
@@ -63,19 +66,20 @@ export default function DrinkDetailPage() {
       {/* Hero Image */}
       <div className="card-vintage overflow-hidden mb-6">
         <div className="relative aspect-video md:aspect-[21/9] overflow-hidden">
-          <img
-            src={drink.strDrinkThumb}
-            alt={drink.strDrink}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              e.target.style.display = 'none'
-              e.target.nextSibling.style.display = 'flex'
-            }}
-          />
-          <div className="hidden absolute inset-0 bg-gradient-to-br from-vintage-accent/20 to-vintage-gold/20
-                          items-center justify-center text-8xl">
-            🍸
-          </div>
+          {!imageError ? (
+            <img
+              src={drink.strDrinkThumb}
+              alt={drink.strDrink}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-vintage-accent/20 to-vintage-gold/20
+                            flex items-center justify-center text-8xl"
+                 role="img" aria-label={cnName}>
+              🍸
+            </div>
+          )}
         </div>
         <div className="p-6">
           <div className="flex items-start justify-between flex-wrap gap-4">
@@ -133,8 +137,8 @@ export default function DrinkDetailPage() {
             📋 配料清单
           </h2>
           <ul className="space-y-2">
-            {ingredients.map((ing, i) => (
-              <li key={i} className="flex justify-between items-center py-1.5
+            {ingredients.map((ing) => (
+              <li key={ing.name} className="flex justify-between items-center py-1.5
                                       border-b border-vintage-gold/10 last:border-0">
                 <span className="font-body text-vintage-ink">
                   {translateIngredient(ing.name)}

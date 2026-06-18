@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../store/useStore'
-import { useFilterByIngredients } from '../hooks/useCocktails'
-import { useCocktailDetail } from '../hooks/useCocktails'
+import { useFilterByIngredients, useEnrichedFilterResults } from '../hooks/useCocktails'
 import { translateIngredient, translateDrinkName } from '../utils/translate'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
@@ -40,6 +39,24 @@ const INGREDIENT_GROUPS = [
   },
 ]
 
+function IngredientTag({ name, type, onClick }) {
+  const label = type === 'matched' ? '✅' : '❌'
+  const baseClass = 'text-xs px-2 py-0.5 rounded-sm font-body border transition-all inline-block m-0.5'
+  const typeClass = type === 'matched'
+    ? 'bg-green-100 text-green-800 border-green-300'
+    : 'bg-red-100 text-red-800 border-red-300 hover:bg-red-200 hover:border-red-400 cursor-pointer'
+
+  return (
+    <span
+      className={`${baseClass} ${typeClass}`}
+      onClick={type === 'missing' ? onClick : undefined}
+      title={type === 'missing' ? `将 ${translateIngredient(name)} 加入采购清单` : undefined}
+    >
+      {label} {translateIngredient(name)}
+    </span>
+  )
+}
+
 export default function FilterPage() {
   const {
     selectedIngredients, toggleIngredient, clearIngredients,
@@ -50,41 +67,49 @@ export default function FilterPage() {
   const [activeTab, setActiveTab] = useState(INGREDIENT_GROUPS[0].category)
   const [showShopping, setShowShopping] = useState(false)
   const [sortBy, setSortBy] = useState('match') // 'match' | 'name'
+  const [erroredImages, setErroredImages] = useState(new Set())
 
+  // Step 1: Get basic filtered drink list from intersection of ingredient results
   const { data: drinks, isLoading, error, refetch } = useFilterByIngredients(selectedIngredients)
 
-  // Compute match info for each drink
-  const drinkMatches = useMemo(() => {
-    if (!drinks) return []
-    return drinks.map(drink => {
-      // We have limited data from filter.php (only id, name, thumb).
-      // For now show basic match info based on ingredient overlap.
-      // Full ingredient data requires lookup.php per drink — use for display.
-      return {
-        ...drink,
-        matchedCount: selectedIngredients.length,
-        totalCount: '?', // Will be filled from detail
-        matchPercent: 100, // Approximation when we don't have full ingredient count
-      }
-    })
-  }, [drinks, selectedIngredients])
+  // Step 2: Enrich with full ingredient data and compute real match scores
+  const { data: enrichedDrinks, isLoading: isEnriching } = useEnrichedFilterResults(drinks, selectedIngredients)
 
-  // Filter by view mode
+  // Step 3: Filter by view mode
   const filteredDrinks = useMemo(() => {
-    if (viewMode === 'strict') return drinkMatches
-    return drinkMatches // In loose mode show all with any match
-  }, [drinkMatches, viewMode])
+    if (!enrichedDrinks) return []
+    if (viewMode === 'strict') {
+      // Only drinks where the user has ALL required ingredients (100% match)
+      return enrichedDrinks.filter(d => d.matchedCount === d.totalCount)
+    }
+    // Loose mode: drinks missing at most 2 ingredients
+    return enrichedDrinks.filter(d => d.totalCount - d.matchedCount <= 2)
+  }, [enrichedDrinks, viewMode])
 
-  // Sort
+  // Step 4: Sort
   const sortedDrinks = useMemo(() => {
     const sorted = [...filteredDrinks]
     if (sortBy === 'name') {
       sorted.sort((a, b) => a.strDrink.localeCompare(b.strDrink))
     } else {
-      sorted.sort((a, b) => b.matchedCount - a.matchedCount)
+      sorted.sort((a, b) => b.matchPercent - a.matchPercent)
     }
     return sorted
   }, [filteredDrinks, sortBy])
+
+  const handleImageError = (idDrink) => {
+    setErroredImages(prev => {
+      const next = new Set(prev)
+      next.add(idDrink)
+      return next
+    })
+  }
+
+  const handleAddMissingIngredient = (ingredientName, drinkName) => {
+    addToShoppingList(ingredientName, '', drinkName)
+  }
+
+  const isLoadingAny = isLoading || isEnriching
 
   return (
     <div className="py-6">
@@ -210,22 +235,32 @@ export default function FilterPage() {
             <EmptyState icon="🧺" message="👈 从左侧选择你已有的材料，看看能调什么酒" />
           )}
 
-          {isLoading && <LoadingSpinner />}
+          {isLoadingAny && <LoadingSpinner />}
           {error && <ErrorMessage message="筛选失败，请重试" onRetry={refetch} />}
+
+          {!isLoadingAny && !error && sortedDrinks.length === 0 && selectedIngredients.length > 0 && drinks && drinks.length > 0 && (
+            <EmptyState icon="🔍" message={`在"${viewMode === 'strict' ? '完全能调' : '差1-2种'}"模式下没有匹配的鸡尾酒，试试切换模式`} />
+          )}
 
           {sortedDrinks.length > 0 && selectedIngredients.length > 0 && (
             <div className="space-y-3">
               {sortedDrinks.map(drink => (
                 <div key={drink.idDrink} className="card-vintage p-4 flex gap-4 items-start group">
                   <Link to={`/drink/${drink.idDrink}`} className="shrink-0">
-                    <div className="w-16 h-16 rounded-sm overflow-hidden border border-vintage-gold/40">
-                      <img
-                        src={drink.strDrinkThumb}
-                        alt={drink.strDrink}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => { e.target.style.display = 'none' }}
-                      />
+                    <div className="w-16 h-16 rounded-sm overflow-hidden border border-vintage-gold/40 bg-vintage-paper">
+                      {erroredImages.has(drink.idDrink) ? (
+                        <div className="w-full h-full flex items-center justify-center text-vintage-gold/40 text-2xl">
+                          🍸
+                        </div>
+                      ) : (
+                        <img
+                          src={drink.strDrinkThumb}
+                          alt={drink.strDrink}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={() => handleImageError(drink.idDrink)}
+                        />
+                      )}
                     </div>
                   </Link>
                   <div className="flex-1 min-w-0">
@@ -249,18 +284,22 @@ export default function FilterPage() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Ingredient tags */}
+                    <div className="mt-2 flex flex-wrap gap-0.5">
+                      {drink.matchedIngredients.map(name => (
+                        <IngredientTag key={name} name={name} type="matched" />
+                      ))}
+                      {drink.missingIngredients.map(name => (
+                        <IngredientTag
+                          key={name}
+                          name={name}
+                          type="missing"
+                          onClick={() => handleAddMissingIngredient(name, drink.strDrink)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => addToShoppingList(
-                      drink.strDrink, '', drink.strDrink
-                    )}
-                    className="text-xs text-vintage-gold/50 hover:text-vintage-accent
-                               transition-all shrink-0 font-body border border-vintage-gold/20
-                               rounded-sm px-2 py-1 hover:border-vintage-accent"
-                    title="加入采购清单"
-                  >
-                    ➕ 缺材料
-                  </button>
                 </div>
               ))}
             </div>
@@ -292,8 +331,8 @@ export default function FilterPage() {
             ) : (
               <>
                 <div className="space-y-3 mb-6">
-                  {shoppingList.map((item, i) => (
-                    <div key={i} className="card-vintage p-3 flex items-start justify-between">
+                  {shoppingList.map((item) => (
+                    <div key={item.name} className="card-vintage p-3 flex items-start justify-between">
                       <div>
                         <p className="font-body text-vintage-ink text-sm font-semibold">
                           {translateIngredient(item.name)}

@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-vintage-bg text-vintage-ink font-body antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  .card-vintage {
+    @apply bg-vintage-card border-2 border-vintage-gold rounded-sm shadow-lg;
+    box-shadow: inset 0 0 0 2px #C9A96E33, 2px 4px 12px rgba(0,0,0,0.3);
+  }
+  .btn-accent {
+    @apply bg-vintage-accent text-vintage-card font-semibold px-6 py-2 rounded-sm
+           border border-vintage-gold hover:brightness-110 transition-all
+           active:translate-y-px;
+  }
+}

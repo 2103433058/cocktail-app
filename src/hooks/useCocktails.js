@@ -30,8 +30,27 @@ export function useFilterByIngredients(ingredients) {
 
 export function useCategoryDrinks(ingredient) {
   return useQuery({
-    queryKey: ['search', ingredient],
-    queryFn: () => cocktailApi.searchByName(ingredient),
+    queryKey: ['category', ingredient],
+    queryFn: async () => {
+      // For Whiskey, search multiple whiskey-related terms to get broader results
+      if (ingredient === 'Whiskey') {
+        const terms = ['Whiskey', 'Bourbon', 'Scotch']
+        const results = await Promise.all(terms.map(t => cocktailApi.searchByName(t)))
+        // Merge and deduplicate
+        const seen = new Set()
+        const merged = []
+        for (const drinks of results) {
+          for (const d of drinks) {
+            if (!seen.has(d.idDrink)) {
+              seen.add(d.idDrink)
+              merged.push(d)
+            }
+          }
+        }
+        return merged
+      }
+      return cocktailApi.searchByName(ingredient)
+    },
     staleTime: 5 * 60 * 1000,
     enabled: !!ingredient,
   })

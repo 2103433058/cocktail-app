@@ -1,7 +1,11 @@
 import { useParams, Link } from 'react-router-dom'
 import { useCocktailDetail } from '../hooks/useCocktails'
 import { useStore } from '../store/useStore'
-import { translateDrinkName, translateIngredient, translateGlass, parseInstructions } from '../utils/translate'
+import {
+  translateDrinkName, translateIngredient, translateGlass,
+  translateInstructions, parseInstructions, findIngredientsInStep,
+  generateCocktailStory, generateStorySubtitle,
+} from '../utils/translate'
 import { useState } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -28,6 +32,7 @@ export default function DrinkDetailPage() {
   const { data: drink, isLoading, error, refetch } = useCocktailDetail(id)
   const { toggleFavorite, isFavorite, addToShoppingList } = useStore()
   const [imageError, setImageError] = useState(false)
+  const [lang, setLang] = useState('zh') // 'zh' | 'en'
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message="加载配方失败" onRetry={refetch} />
@@ -37,6 +42,9 @@ export default function DrinkDetailPage() {
   const ingredients = getIngredients(drink)
   const cnName = translateDrinkName(drink.strDrink)
   const steps = parseInstructions(drink.strInstructions)
+  const instructionsZH = translateInstructions(drink.strInstructions)
+  const story = generateCocktailStory(drink, ingredients)
+  const subtitle = generateStorySubtitle(drink)
 
   const handleShare = async () => {
     const shareData = {
@@ -65,7 +73,7 @@ export default function DrinkDetailPage() {
         ← 返回
       </Link>
 
-      {/* Hero Image */}
+      {/* ── Hero Section ── */}
       <div className="card-vintage overflow-hidden mb-6">
         <div className="relative aspect-video md:aspect-[21/9] overflow-hidden">
           {!imageError ? (
@@ -83,11 +91,22 @@ export default function DrinkDetailPage() {
             </div>
           )}
         </div>
+
         <div className="p-6">
           <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
+            <div className="flex-1">
               <h1 className="font-heading text-3xl text-vintage-ink">{cnName}</h1>
               <p className="font-script text-xl text-vintage-gold mt-1">{drink.strDrink}</p>
+
+              {/* ── Story ── */}
+              <div className="mt-3 p-4 bg-vintage-paper/50 rounded-sm border border-vintage-gold/20
+                              italic text-sm text-vintage-ink/80 leading-relaxed font-body">
+                <span className="text-vintage-accent text-lg leading-none">❝</span>
+                {' '}{story}
+              </div>
+              <p className="text-xs text-vintage-gold/50 mt-1.5 font-body">{subtitle}</p>
+
+              {/* Tags */}
               <div className="flex flex-wrap gap-2 mt-3">
                 {drink.strCategory && (
                   <span className="bg-vintage-gold/20 text-vintage-ink text-xs px-3 py-1 rounded-full
@@ -115,6 +134,7 @@ export default function DrinkDetailPage() {
                 )}
               </div>
             </div>
+
             <div className="flex gap-2">
               <button
                 onClick={() => toggleFavorite(drink.idDrink)}
@@ -138,67 +158,141 @@ export default function DrinkDetailPage() {
         </div>
       </div>
 
+      {/* ── Ingredients & Instructions ── */}
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        {/* Ingredients */}
+        {/* Ingredients Card */}
         <div className="card-vintage p-6">
           <h2 className="font-heading text-xl text-vintage-ink border-b border-vintage-gold/30 pb-2 mb-4">
-            📋 配料清单 ({ingredients.length}种)
+            📋 配料清单 <span className="text-sm text-vintage-gold/60 font-body">({ingredients.length}种)</span>
           </h2>
           <ul className="space-y-2">
             {ingredients.map((ing) => (
               <li key={ing.name} className="flex justify-between items-center py-1.5
                                       border-b border-vintage-gold/10 last:border-0">
                 <span className="font-body text-vintage-ink">
+                  <span className="text-vintage-accent mr-1">•</span>
                   {translateIngredient(ing.name)}
-                  <span className="text-xs text-vintage-gold/60 ml-1">{ing.name}</span>
+                  <span className="text-xs text-vintage-gold/50 ml-1">({ing.name})</span>
                 </span>
-                {ing.measure && (
-                  <span className="font-script text-vintage-gold text-sm">{ing.measure}</span>
-                )}
-                <button
-                  onClick={() => addToShoppingList(ing.name, '', drink.strDrink)}
-                  className="text-xs text-vintage-gold/50 hover:text-vintage-accent ml-2"
-                  title="加入采购清单"
-                >
-                  ➕
-                </button>
+                <div className="flex items-center gap-2">
+                  {ing.measure && (
+                    <span className="font-script text-vintage-gold text-sm">{ing.measure}</span>
+                  )}
+                  <button
+                    onClick={() => addToShoppingList(ing.name, '', drink.strDrink)}
+                    className="text-xs text-vintage-gold/40 hover:text-vintage-accent"
+                    title="加入采购清单"
+                  >
+                    ➕
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Instructions — now step-by-step */}
+        {/* Instructions Card */}
         <div className="card-vintage p-6">
-          <h2 className="font-heading text-xl text-vintage-ink border-b border-vintage-gold/30 pb-2 mb-4">
-            📝 制作步骤
-          </h2>
-          {steps.length > 0 ? (
-            <ol className="space-y-5">
-              {steps.map((step, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="shrink-0 text-xl mt-0.5">{STEP_ICONS[i] || '🔸'}</span>
-                  <div className="flex-1">
-                    {step.hint && (
-                      <p className="text-xs text-vintage-accent font-body mb-1">{step.hint}</p>
-                    )}
-                    <p className="font-body text-vintage-ink leading-relaxed">{step.text}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+          <div className="flex items-center justify-between border-b border-vintage-gold/30 pb-2 mb-4">
+            <h2 className="font-heading text-xl text-vintage-ink">
+              📝 制作步骤
+            </h2>
+            {/* Language toggle */}
+            <div className="flex border border-vintage-gold/40 rounded-sm overflow-hidden text-xs font-body">
+              <button
+                onClick={() => setLang('zh')}
+                className={`px-3 py-1 transition-colors ${
+                  lang === 'zh'
+                    ? 'bg-vintage-accent text-vintage-card'
+                    : 'bg-transparent text-vintage-gold hover:bg-vintage-gold/10'
+                }`}
+              >
+                中文
+              </button>
+              <button
+                onClick={() => setLang('en')}
+                className={`px-3 py-1 transition-colors ${
+                  lang === 'en'
+                    ? 'bg-vintage-accent text-vintage-card'
+                    : 'bg-transparent text-vintage-gold hover:bg-vintage-gold/10'
+                }`}
+              >
+                EN
+              </button>
+            </div>
+          </div>
+
+          {lang === 'en' ? (
+            /* ── English: step-by-step with ingredient tags ── */
+            steps.length > 0 ? (
+              <ol className="space-y-5">
+                {steps.map((step, i) => {
+                  const stepIngredients = findIngredientsInStep(step.text, ingredients)
+                  return (
+                    <li key={i} className="flex gap-3">
+                      <span className="shrink-0 text-xl mt-0.5">{STEP_ICONS[i] || '🔸'}</span>
+                      <div className="flex-1">
+                        {step.hint && (
+                          <p className="text-xs text-vintage-accent font-body mb-1">{step.hint}</p>
+                        )}
+                        <p className="font-body text-vintage-ink leading-relaxed">{step.text}</p>
+                        {/* Show related ingredients */}
+                        {stepIngredients.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {stepIngredients.map(ing => (
+                              <span key={ing.name} className="text-xs bg-vintage-gold/10 text-vintage-gold
+                                                              px-2 py-0.5 rounded-full font-body">
+                                🧂 {translateIngredient(ing.name)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ol>
+            ) : (
+              <p className="font-body text-vintage-ink leading-relaxed whitespace-pre-line">
+                {drink.strInstructions || '暂无制作步骤'}
+              </p>
+            )
           ) : (
-            <p className="font-body text-vintage-ink leading-relaxed whitespace-pre-line">
-              {drink.strInstructions || '暂无制作步骤'}
-            </p>
+            /* ── Chinese: translated text with ingredient tags ── */
+            <div className="space-y-5">
+              {steps.map((step, i) => {
+                const stepIngredients = findIngredientsInStep(step.text, ingredients)
+                return (
+                  <div key={i} className="flex gap-3">
+                    <span className="shrink-0 text-xl mt-0.5">{STEP_ICONS[i] || '🔸'}</span>
+                    <div className="flex-1">
+                      <p className="font-body text-vintage-ink leading-relaxed">
+                        {translateInstructions(step.text)}
+                      </p>
+                      {stepIngredients.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {stepIngredients.map(ing => (
+                            <span key={ing.name} className="text-xs bg-vintage-gold/10 text-vintage-gold
+                                                            px-2 py-0.5 rounded-full font-body">
+                              🧂 {translateIngredient(ing.name)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
 
-          {/* Original English instructions as reference */}
-          {steps.length > 0 && (
+          {/* Toggle to see original English when in Chinese mode */}
+          {lang === 'zh' && (
             <details className="mt-6 pt-4 border-t border-vintage-gold/20">
-              <summary className="text-xs text-vintage-gold/60 cursor-pointer font-body hover:text-vintage-gold">
-                查看英文原文
+              <summary className="text-xs text-vintage-gold/50 cursor-pointer font-body hover:text-vintage-gold">
+                📖 查看英文原文
               </summary>
-              <p className="mt-2 text-sm text-vintage-gold/70 font-body leading-relaxed whitespace-pre-line">
+              <p className="mt-2 text-sm text-vintage-gold/60 font-body leading-relaxed whitespace-pre-line">
                 {drink.strInstructions}
               </p>
             </details>
@@ -206,8 +300,8 @@ export default function DrinkDetailPage() {
 
           {drink.strInstructionsZH && (
             <div className="mt-4 pt-4 border-t border-vintage-gold/20">
-              <p className="text-sm text-vintage-gold/70 mb-1">📖 中文参考：</p>
-              <p className="font-body text-vintage-ink leading-relaxed">
+              <p className="text-xs text-vintage-gold/50 mb-1">📖 API中文参考：</p>
+              <p className="font-body text-vintage-ink leading-relaxed text-sm">
                 {drink.strInstructionsZH}
               </p>
             </div>
@@ -215,13 +309,13 @@ export default function DrinkDetailPage() {
         </div>
       </div>
 
-      {/* Extra info bar */}
-      {(drink.strTags || drink.strIBA) && (
+      {/* ── Extra info card ── */}
+      {(drink.strTags || drink.strIBA || drink.strAlcoholic) && (
         <div className="card-vintage p-4 mb-6">
-          <div className="flex flex-wrap gap-4 text-sm font-body">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-body">
             {drink.strTags && (
               <div>
-                <span className="text-vintage-gold/60">🏷️ 标签：</span>
+                <span className="text-vintage-gold/60">🏷️ 风味标签：</span>
                 <span className="text-vintage-ink">{drink.strTags.split(',').join('、')}</span>
               </div>
             )}

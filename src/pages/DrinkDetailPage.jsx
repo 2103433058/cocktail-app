@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useCocktailDetail } from '../hooks/useCocktails'
 import { useStore } from '../store/useStore'
 import {
-  translateDrinkName, translateIngredient, translateGlass,
+  translateDrinkName, translateIngredient, translateGlass, getIngredientInfo,
   translateInstructions, parseInstructions, findIngredientsInStep,
   generateCocktailStory, generateStorySubtitle,
 } from '../utils/translate'
@@ -165,29 +165,60 @@ export default function DrinkDetailPage() {
           <h2 className="font-heading text-xl text-vintage-ink border-b border-vintage-gold/30 pb-2 mb-4">
             📋 配料清单 <span className="text-sm text-vintage-gold/60 font-body">({ingredients.length}种)</span>
           </h2>
-          <ul className="space-y-2">
-            {ingredients.map((ing) => (
-              <li key={ing.name} className="flex justify-between items-center py-1.5
-                                      border-b border-vintage-gold/10 last:border-0">
-                <span className="font-body text-vintage-ink">
-                  <span className="text-vintage-accent mr-1">•</span>
-                  {translateIngredient(ing.name)}
-                  <span className="text-xs text-vintage-gold/50 ml-1">({ing.name})</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  {ing.measure && (
-                    <span className="font-script text-vintage-gold text-sm">{ing.measure}</span>
-                  )}
-                  <button
-                    onClick={() => addToShoppingList(ing.name, '', drink.strDrink)}
-                    className="text-xs text-vintage-gold/40 hover:text-vintage-accent"
-                    title="加入采购清单"
-                  >
-                    ➕
-                  </button>
-                </div>
-              </li>
-            ))}
+          <ul className="space-y-1">
+            {ingredients.map((ing) => {
+              const info = getIngredientInfo(ing.name)
+              const cnName = translateIngredient(ing.name)
+              const isSpecial = cnName !== ing.name // has Chinese translation = known ingredient
+              return (
+                <li key={ing.name} className="border-b border-vintage-gold/5 last:border-0">
+                  <div className="flex justify-between items-center py-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-body text-vintage-ink text-sm font-semibold">
+                          {isSpecial ? cnName : ing.name}
+                        </span>
+                        {isSpecial && (
+                          <span className="text-xs text-vintage-gold/40 font-body truncate">
+                            {ing.name}
+                          </span>
+                        )}
+                        {!isSpecial && (
+                          <span className="text-xs text-vintage-gold/40 font-body">
+                            (未收录的原料)
+                          </span>
+                        )}
+                      </div>
+                      {/* Ingredient description */}
+                      {info && (
+                        <p className="text-xs text-vintage-gold/50 mt-1 leading-relaxed line-clamp-2">
+                          {info}
+                        </p>
+                      )}
+                      {!info && isSpecial && (
+                        <p className="text-xs text-vintage-gold/30 mt-1 font-body italic">
+                          常见调酒原料，暂无详细说明
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      {ing.measure && (
+                        <span className="font-script text-vintage-gold text-sm whitespace-nowrap">
+                          {ing.measure}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => addToShoppingList(ing.name, '', drink.strDrink)}
+                        className="text-xs text-vintage-gold/30 hover:text-vintage-accent transition-colors"
+                        title="加入采购清单"
+                      >
+                        ➕
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </div>
 

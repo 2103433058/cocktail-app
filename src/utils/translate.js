@@ -16,6 +16,10 @@ export function translateGlass(en) {
   return zh.glasses[en] || en
 }
 
+export function getIngredientInfo(en) {
+  return zh.ingredientInfo?.[en] || null
+}
+
 // ─── Intelligent Chinese instruction generator ───
 // Instead of regex-translating English (poor quality),
 // we detect the cocktail method and generate natural Chinese from the data.

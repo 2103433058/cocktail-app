@@ -16,68 +16,121 @@ export function translateGlass(en) {
   return zh.glasses[en] || en
 }
 
-// Instruction phrase translations (English phrase → Chinese)
-const PHRASE_MAP = [
-  // Shaking & mixing
-  [/shake\s*(all\s*)?(ingredients|well|vigorously|together)?\s*(with\s*)?(ice\s*cubes?)?/gi, '将所有材料加冰倒入摇酒壶，用力摇匀'],
-  [/stir(red)?\s*(well|gently|together)?\s*(with\s*ice)?/gi, '用吧勺轻轻搅拌融合'],
-  [/muddle\s*(the\s*)?([a-z\s]+?)(\s*in|with|together)/gi, '在杯底将$2捣碎，释放香气'],
-  [/blend\s*(all\s*)?(ingredients|together)?\s*(with\s*ice)?/gi, '将所有材料与冰块一起放入搅拌机打匀'],
+// ─── Intelligent Chinese instruction generator ───
+// Instead of regex-translating English (poor quality),
+// we detect the cocktail method and generate natural Chinese from the data.
 
-  // Pouring & building
-  [/pour\s*(the\s*)?([a-z\s]+?)\s*(into|over)/gi, '将$2倒入杯中'],
-  [/fill\s*the\s*glass\s*with\s*ice/gi, '在杯中加满冰块'],
-  [/fill\s*(a\s*)?([a-z\s]*glass)\s*with\s*(ice\s*cubes?)/gi, '在$2中加入冰块'],
-  [/top\s*(it\s*)?(up\s*)?(off\s*)?\s*with\s*([a-z\s]+)/gi, '顶部缓缓注入$4'],
-  [/add\s*(the\s*)?([a-z\s]+?)(\s*and|,|\s*to\s*)/gi, '加入$2'],
-  [/combine\s*(the\s*)?([a-z\s]+?)(\s*in|with|and)/gi, '将$2与其他材料混合'],
+function detectMethod(instructions) {
+  if (!instructions) return 'build'
+  const t = instructions.toLowerCase()
+  if (t.includes('shake') || t.includes('shaker')) return 'shake'
+  if (t.includes('stir')) return 'stir'
+  if (t.includes('blender') || t.includes('blend')) return 'blend'
+  if (t.includes('muddle')) return 'muddle'
+  if (t.includes('build') || t.includes('pour directly')) return 'build'
+  return 'build'
+}
 
-  // Straining & serving
-  [/strain\s*(into|the\s*mixture)?\s*(into\s*)?([a-z\s]*glass)/gi, '通过滤网倒入$3中'],
-  [/double[\s-]?strain/gi, '用双重滤网过滤'],
-  [/fine[\s-]?strain/gi, '用细网过滤'],
-  [/serve\s*(immediately|right\s*away|chilled)?/gi, '立即享用'],
-  [/serve\s*in\s*a\s*([a-z\s]*glass)/gi, '用$1盛装呈上'],
+function detectGlassPrep(instructions) {
+  if (!instructions) return null
+  const t = instructions.toLowerCase()
+  if (t.includes('chill') && t.includes('glass')) return 'chill'
+  if (t.includes('rub') && t.includes('rim')) return 'salt-rim'
+  if (t.includes('coat') && t.includes('rim')) return 'sugar-rim'
+  if (t.includes('moisten') && t.includes('rim')) return 'moisten-rim'
+  return null
+}
 
-  // Garnishes
-  [/garnish\s*with\s*(a\s*|an\s*)?([a-z\s,]+)(\.|$)/gi, '用$2作为装饰点缀'],
-  [/twist\s*of\s*([a-z]+)(\s*peel)?/gi, '扭一片$1皮'],
-  [/squeeze\s*(a\s*|the\s*)?([a-z]+)(\s*wedge|\s*slice)?/gi, '挤入新鲜$2汁'],
-  [/rim\s*of\s*the\s*glass\s*with\s*([a-z\s]+)/gi, '用$1擦拭杯口边缘'],
-  [/coat\s*the\s*rim\s*with\s*([a-z]+)/gi, '杯口沾上一圈$1'],
+function findGarnish(instructions, ingredients) {
+  if (!instructions) return null
+  const t = instructions.toLowerCase()
+  const garnishWords = ['lemon', 'lime', 'orange', 'cherry', 'mint', 'olive', 'pineapple', 'strawberry', 'basil', 'rosemary', 'cucumber', 'apple']
+  for (const gw of garnishWords) {
+    if (t.includes(gw) && (t.includes('garnish') || t.includes('twist') || t.includes('slice') || t.includes('wedge') || t.includes('sprig') || t.includes('wheel') || t.includes('peel'))) {
+      const match = ingredients.find(i => i.name.toLowerCase().includes(gw))
+      return match ? match.name : gw
+    }
+  }
+  return null
+}
 
-  // Preparation
-  [/chill\s*(a\s*|the\s*)?([a-z\s]*glass)/gi, '将$2放入冰箱冰镇'],
-  [/moisten\s*(the\s*)?([a-z\s]+)/gi, '将$2微微湿润'],
-  [/rub\s*the\s*([a-z]+)/gi, '用$1轻轻擦拭'],
-  [/almost\s*fill(ed)?\s*with\s*ice/gi, '杯中装八分满冰块'],
-  [/half[\s-]?fill(ed)?\s*with\s*ice/gi, '杯中装半满冰块'],
+function pickMainSpirit(ingredients) {
+  const spirits = ['Vodka', 'Gin', 'Rum', 'Tequila', 'Whiskey', 'Bourbon', 'Scotch', 'Brandy', 'Cognac', 'White Rum', 'Dark Rum', 'Light Rum', 'Spiced Rum']
+  for (const s of spirits) {
+    const found = ingredients.find(i => i.name.toLowerCase() === s.toLowerCase())
+    if (found) return found.name
+  }
+  return ingredients[0]?.name || '基酒'
+}
 
-  // Common actions
-  [/dissolve\s*([a-z\s]+?)\s*in\s*/gi, '将$1溶入'],
-  [/prepare\s*all\s*(the\s*)?ingredients/gi, '将所有材料准备就绪'],
-  [/roll\s*the\s*([a-z]+)/gi, '将$1轻轻滚动'],
-  [/swirl\s*(the\s*)?glass/gi, '旋转杯子使其均匀附着'],
-  [/float\s*([a-z\s]+)\s*on\s*top/gi, '在顶部小心漂浮一层$1'],
-]
+function pickMixers(ingredients) {
+  const mixers = ['Lime Juice', 'Lemon Juice', 'Orange Juice', 'Pineapple Juice', 'Cranberry Juice', 'Grapefruit Juice', 'Simple Syrup', 'Sugar Syrup', 'Grenadine', 'Soda Water', 'Tonic Water', 'Coca-Cola', 'Ginger Beer', 'Ginger Ale', 'Cream', 'Egg White', 'Honey', 'Triple Sec', 'Cointreau', 'Blue Curacao', 'Sweet Vermouth', 'Dry Vermouth', 'Campari', 'Angostura Bitters', 'Orange Bitters']
+  return ingredients.filter(i => mixers.some(m => m.toLowerCase() === i.name.toLowerCase()))
+}
 
-// Translate a full English instruction text to Chinese
-export function translateInstructions(englishText) {
-  if (!englishText) return '暂无制作步骤'
+export function translateInstructions(englishText, ingredients = []) {
+  if (!englishText) return []
 
-  let text = englishText
-    .replace(/\\r\\n/g, '\n')
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\n')
-    .replace(/\s+/g, ' ')
-    .trim()
+  const method = detectMethod(englishText)
+  const glassPrep = detectGlassPrep(englishText)
+  const garnish = findGarnish(englishText, ingredients)
+  const mainSpirit = pickMainSpirit(ingredients)
+  const mixers = pickMixers(ingredients)
+  const mixerNames = mixers.map(i => translateIngredient(i.name))
 
-  // Apply phrase translations
-  for (const [pattern, replacement] of PHRASE_MAP) {
-    text = text.replace(pattern, replacement)
+  const steps = []
+
+  // Step 1: Glass preparation
+  if (glassPrep === 'chill') {
+    steps.push('将杯子放入冰箱冷藏片刻，或加冰预冷后倒掉冰水。冰镇过的杯子能让鸡尾酒保持最佳口感。')
+  } else if (glassPrep === 'salt-rim') {
+    steps.push('用柠檬角沿杯口边缘擦拭一圈，然后将杯口倒扣在盐盘中旋转，让杯口均匀沾上一层细盐。')
+  } else if (glassPrep === 'sugar-rim') {
+    steps.push('用柠檬角沿杯口边缘擦拭一圈，然后将杯口倒扣在糖盘中旋转，让杯口均匀沾上一层糖粒。')
+  } else if (glassPrep === 'moisten-rim') {
+    steps.push('用柠檬片轻轻擦拭杯口边缘，使其微微湿润即可。')
+  } else {
+    steps.push('准备一只干净的酒杯，放入适量冰块预冷备用。')
   }
 
-  return text
+  // Step 2: Mixing method
+  if (method === 'shake') {
+    const ingList = [translateIngredient(mainSpirit), ...mixerNames].filter(Boolean).join('、')
+    steps.push(`在摇酒壶中加入适量冰块，依次倒入${ingList}。盖紧壶盖，双手握住摇酒壶，用力上下摇动约15-20秒，直到壶身表面结起一层白霜。`)
+    steps.push('打开摇酒壶，用滤网（Hawthorne Strainer）将混合液过滤倒入准备好的杯中。')
+  } else if (method === 'stir') {
+    const ingList = [translateIngredient(mainSpirit), ...mixerNames].filter(Boolean).join('、')
+    steps.push(`在调酒杯（Mixing Glass）中加入大量冰块，依次倒入${ingList}。用吧勺贴杯壁缓缓搅拌约30秒，使材料充分融合并降温稀释。`)
+    steps.push('用滤网（Julep Strainer）将酒液过滤倒入准备好的杯中。')
+  } else if (method === 'blend') {
+    const ingList = [translateIngredient(mainSpirit), ...mixerNames].filter(Boolean).join('、')
+    steps.push(`在搅拌机中加入适量碎冰，然后倒入${ingList}。启动搅拌机，高速搅打约10-15秒，直到混合物呈现顺滑的泥状质地。`)
+    steps.push('将打好的混合物倒入杯中，无需过滤。')
+  } else if (method === 'muddle') {
+    const ingList = [translateIngredient(mainSpirit), ...mixerNames].filter(Boolean).join('、')
+    steps.push('在杯底放入需要捣碎的新鲜材料（如薄荷叶、柠檬角、方糖等），用捣棒轻轻按压旋转几次，释放香气和汁液。注意不要过度捣碎，以免产生苦味。')
+    steps.push(`加入冰块，然后倒入${ingList}，用吧勺轻轻搅拌使所有材料融合。`)
+  } else {
+    // build method
+    const ingList = [translateIngredient(mainSpirit), ...mixerNames].filter(Boolean).join('、')
+    steps.push(`在杯中加满冰块，依次倒入${ingList}。用吧勺轻轻搅拌几下，让各种材料在杯中自然融合。`)
+  }
+
+  // Step 3: Carbonation / topping
+  const t = englishText.toLowerCase()
+  if (t.includes('top') && (t.includes('soda') || t.includes('tonic') || t.includes('carbonated') || t.includes('ginger') || t.includes('champagne') || t.includes('prosecco') || t.includes('cola'))) {
+    steps.push('最后，沿杯壁缓缓注入气泡饮料，轻轻用吧勺提拉一下使气泡均匀分布。不要过度搅拌，以免气泡散失。')
+  }
+
+  // Step 4: Garnish
+  if (garnish) {
+    const gName = translateIngredient(garnish)
+    steps.push(`最后进行装饰：取${gName}，精心摆放在杯口或酒液表面。一杯精致的鸡尾酒就此完成，请立即享用。`)
+  } else {
+    steps.push('一杯精心调制的鸡尾酒就此完成。趁着冰凉，慢慢品味吧。')
+  }
+
+  return steps.map((text, i) => `${i + 1}、${text}`)
 }
 
 // Step keyword detection for icons

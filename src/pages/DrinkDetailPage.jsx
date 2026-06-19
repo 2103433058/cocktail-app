@@ -42,7 +42,7 @@ export default function DrinkDetailPage() {
   const ingredients = getIngredients(drink)
   const cnName = translateDrinkName(drink.strDrink)
   const steps = parseInstructions(drink.strInstructions)
-  const instructionsZH = translateInstructions(drink.strInstructions)
+  const instructionsZH = translateInstructions(drink.strInstructions, ingredients)
   const story = generateCocktailStory(drink, ingredients)
   const subtitle = generateStorySubtitle(drink)
 
@@ -223,7 +223,7 @@ export default function DrinkDetailPage() {
           </div>
 
           {lang === 'en' ? (
-            /* ── English: step-by-step with ingredient tags ── */
+            /* ── English: original step-by-step with ingredient tags ── */
             steps.length > 0 ? (
               <ol className="space-y-5">
                 {steps.map((step, i) => {
@@ -236,7 +236,6 @@ export default function DrinkDetailPage() {
                           <p className="text-xs text-vintage-accent font-body mb-1">{step.hint}</p>
                         )}
                         <p className="font-body text-vintage-ink leading-relaxed">{step.text}</p>
-                        {/* Show related ingredients */}
                         {stepIngredients.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {stepIngredients.map(ing => (
@@ -258,32 +257,23 @@ export default function DrinkDetailPage() {
               </p>
             )
           ) : (
-            /* ── Chinese: translated text with ingredient tags ── */
-            <div className="space-y-5">
-              {steps.map((step, i) => {
-                const stepIngredients = findIngredientsInStep(step.text, ingredients)
-                return (
+            /* ── Chinese: data-driven native Chinese instructions ── */
+            instructionsZH.length > 0 ? (
+              <div className="space-y-5">
+                {instructionsZH.map((stepText, i) => (
                   <div key={i} className="flex gap-3">
                     <span className="shrink-0 text-xl mt-0.5">{STEP_ICONS[i] || '🔸'}</span>
                     <div className="flex-1">
-                      <p className="font-body text-vintage-ink leading-relaxed">
-                        {translateInstructions(step.text)}
-                      </p>
-                      {stepIngredients.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {stepIngredients.map(ing => (
-                            <span key={ing.name} className="text-xs bg-vintage-gold/10 text-vintage-gold
-                                                            px-2 py-0.5 rounded-full font-body">
-                              🧂 {translateIngredient(ing.name)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <p className="font-body text-vintage-ink leading-relaxed">{stepText}</p>
                     </div>
                   </div>
-                )
-              })}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="font-body text-vintage-ink leading-relaxed whitespace-pre-line">
+                {drink.strInstructions || '暂无制作步骤'}
+              </p>
+            )
           )}
 
           {/* Toggle to see original English when in Chinese mode */}

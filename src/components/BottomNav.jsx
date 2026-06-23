@@ -10,7 +10,7 @@ const navItems = [
 export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-vintage-bg border-t-2 border-vintage-gold
-                    md:hidden z-50">
+                    md:hidden z-50 safe-bottom">
       <div className="flex justify-around py-2">
         {navItems.map(item => (
           <NavLink
